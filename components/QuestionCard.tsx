@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { normalizeAnswer, type Question } from "@/lib/types";
+import { isMultiAnswer, normalizeAnswer, type Question } from "@/lib/types";
 import { useProgress } from "@/lib/useProgress";
 
 interface Props {
@@ -21,24 +21,38 @@ export function QuestionCard({
   onAnswered,
 }: Props) {
   const { bookmarks, toggleBookmark, recordAnswer } = useProgress();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const answer = normalizeAnswer(question.answer);
+  const multi = isMultiAnswer(question.answer);
+  const requiredCount = answer.length;
   const bookmarked = bookmarks.includes(question.num);
 
   // reset local state when the question changes
   useEffect(() => {
-    setSelected(null);
+    setSelected([]);
     setSubmitted(false);
   }, [question.num]);
 
   const reveal = submitted || mode === "study";
 
+  function toggle(label: string) {
+    if (submitted) return;
+    setSelected((prev) => {
+      if (prev.includes(label)) return prev.filter((l) => l !== label);
+      // single-answer: replace; multi-answer: add (cap at the required count)
+      if (!multi) return [label];
+      if (prev.length >= requiredCount) return prev;
+      return [...prev, label];
+    });
+  }
+
   function submit() {
-    if (selected === null) return;
-    const isCorrect = selected === answer;
+    if (selected.length === 0) return;
+    const picked = [...selected].sort().join("");
+    const isCorrect = picked === answer;
     setSubmitted(true);
-    recordAnswer(question.num, selected, isCorrect);
+    recordAnswer(question.num, picked, isCorrect);
     onAnswered?.(isCorrect);
   }
 
@@ -66,9 +80,20 @@ export function QuestionCard({
       </div>
 
       <div className="space-y-2.5 p-4 sm:p-5">
+        {multi && (
+          <p className="flex items-center gap-2 text-xs font-medium text-accent">
+            <span className="rounded bg-accent-soft px-1.5 py-0.5">복수 정답</span>
+            {requiredCount}개를 선택하세요
+            {!submitted && mode === "quiz" && (
+              <span className="text-muted">
+                ({selected.length}/{requiredCount})
+              </span>
+            )}
+          </p>
+        )}
         {question.choices.map((c) => {
-          const isAnswer = c.label === answer;
-          const isPicked = selected === c.label;
+          const isAnswer = answer.includes(c.label);
+          const isPicked = selected.includes(c.label);
 
           let cls =
             "border-token bg-surface2 hover:border-accent/50";
@@ -85,7 +110,7 @@ export function QuestionCard({
               key={c.label}
               type="button"
               disabled={reveal && mode === "quiz"}
-              onClick={() => !submitted && setSelected(c.label)}
+              onClick={() => toggle(c.label)}
               className={`flex w-full items-start gap-3 rounded-lg border p-3 text-left text-sm transition ${cls}`}
             >
               <span
@@ -107,7 +132,7 @@ export function QuestionCard({
         {mode === "quiz" && !submitted && (
           <button
             type="button"
-            disabled={selected === null}
+            disabled={multi ? selected.length !== requiredCount : selected.length === 0}
             onClick={submit}
             className="mt-2 w-full rounded-lg bg-accent py-2.5 text-sm font-semibold text-black transition disabled:cursor-not-allowed disabled:opacity-40"
           >
@@ -119,15 +144,19 @@ export function QuestionCard({
           <div className="mt-3 rounded-lg border border-token bg-surface2 p-4">
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
               <span className="rounded bg-emerald-500/15 px-2 py-0.5 font-mono text-emerald-500">
-                정답: {answer}
+                정답: {answer.split("").join(", ")}
               </span>
               {submitted && (
                 <span
                   className={
-                    selected === answer ? "text-emerald-500" : "text-red-500"
+                    [...selected].sort().join("") === answer
+                      ? "text-emerald-500"
+                      : "text-red-500"
                   }
                 >
-                  {selected === answer ? "✓ 정답입니다" : "✗ 오답입니다"}
+                  {[...selected].sort().join("") === answer
+                    ? "✓ 정답입니다"
+                    : "✗ 오답입니다"}
                 </span>
               )}
             </div>

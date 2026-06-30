@@ -11,8 +11,17 @@ export interface Question {
   explanation: string;
 }
 
-/** Normalize answers like "A," or "a" -> "A". Single-answer dataset. */
+/**
+ * Normalize an answer string into its sorted unique choice letters.
+ * Handles single answers ("A," -> "A") and multi-answers ("A, B" -> "AB").
+ */
 export function normalizeAnswer(raw: string): string {
-  const letters = (raw || "").toUpperCase().match(/[A-E]/g);
-  return letters ? letters.join("") : "";
+  const letters = (raw || "").toUpperCase().match(/[A-F]/g);
+  if (!letters) return "";
+  return [...new Set(letters)].sort().join("");
+}
+
+/** True when a question expects more than one correct choice. */
+export function isMultiAnswer(raw: string): boolean {
+  return normalizeAnswer(raw).length > 1;
 }
